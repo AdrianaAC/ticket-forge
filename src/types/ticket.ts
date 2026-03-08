@@ -1,5 +1,7 @@
+export type TicketSource = "jira" | "azure" | "github" | "unknown";
+
 export type NormalizedTicket = {
-  source: "jira" | "azure" | "github" | "unknown";
+  source: TicketSource;
   title: string;
   ticketId?: string;
   type?: string;

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const normalizedTicketSchema = z.object({
   source: z.enum(["jira", "azure", "github", "unknown"]),
-  title: z.string(),
+  title: z.string().default(""),
   ticketId: z.string().optional(),
   type: z.string().optional(),
   description: z.string().optional(),
