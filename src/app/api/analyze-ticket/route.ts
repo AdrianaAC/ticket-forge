@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { openai } from "@/lib/openai";
-import { buildSourceSpecificGuidance, ticketJsonSchema } from "@/lib/ticketExtraction";
-import { normalizedTicketSchema } from "@/schemas/ticket";
+import { ticketAnalysisJsonSchema } from "@/lib/openai-ticket-schema";
+import { ticketAnalysisResultSchema } from "@/schemas/universal-ticket";
+import {
+  getMissingCriticalFields,
+  normalizeKind,
+  normalizePriority,
+  normalizeStatusCategory,
+} from "@/lib/ticket-normalizers";
+import { ticketDomainContext } from "@/lib/agent-context/ticket-domain-context";
+import { buildFallbackNotes } from "@/lib/ticket-notes";
+import { normalizeTicketNulls } from "@/lib/utils/ticket-null-normalizer";
+import { validateTicketSchema } from "@/lib/utils/ticket-schema-self-test";
 
 const requestSchema = z.object({
   source: z.enum(["jira", "azure", "github", "unknown"]),
@@ -10,42 +20,31 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  validateTicketSchema();
+
   try {
     const body = await request.json();
     const parsedBody = requestSchema.safeParse(body);
 
     if (!parsedBody.success) {
       return NextResponse.json(
-        { error: "Invalid request payload", details: parsedBody.error.flatten() },
-        { status: 400 }
+        { error: "Invalid request body" },
+        { status: 400 },
       );
     }
 
     const { source, images } = parsedBody.data;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: "gpt-4.1-mini",
       response_format: {
         type: "json_schema",
-        json_schema: ticketJsonSchema,
+        json_schema: ticketAnalysisJsonSchema,
       },
       messages: [
         {
           role: "system",
-          content: `
-You are a ticket analyzer.
-
-Your job:
-- Read one or more screenshots of a software development ticket
-- Extract visible information only
-- Return a normalized ticket object
-- If something is not visible, omit it or leave it empty
-- Never invent requirements
-- Keep extracted text faithful to the screenshot
-- acceptanceCriteria, comments, and labels must always be arrays
-
-${buildSourceSpecificGuidance(source)}
-          `.trim(),
+          content: ticketDomainContext,
         },
         {
           role: "user",
@@ -53,15 +52,35 @@ ${buildSourceSpecificGuidance(source)}
             {
               type: "text",
               text: `
-Analyze these ticket screenshots and extract the ticket data.
+Analyze these screenshots as a ${source} ticket.
 
-Rules:
-- source must be "${source}"
-- title is required; if not visible, use an empty string
-- Combine information from all screenshots
-- Put longer visible text in rawExtractedText
-- Return only the JSON object matching the schema
-              `.trim(),
+Your task:
+- identify the visible ticket fields
+- preserve platform-specific meanings
+- normalize them into the required TicketAnalysisResult schema
+- do not invent values
+- if information is missing, list it in missingCriticalFields
+- if information is unclear or partially visible, list it in lowConfidenceFields
+- include useful extraction concerns in extractionWarnings
+- include short analyst notes in notes when they help the user review the extraction
+
+Focus especially on:
+- title
+- ticket key or id
+- issue/work item type
+- description
+- acceptance criteria
+- priority
+- status
+- assignee
+- labels
+- comments
+- planning fields like sprint, story points, estimates
+- hierarchy fields like parent or epic
+- bug-specific fields like reproduction steps, expected behavior, actual behavior
+
+Return only valid JSON matching the schema.
+`.trim(),
             },
             ...images.map((image) => ({
               type: "image_url" as const,
@@ -75,34 +94,57 @@ Rules:
     const raw = response.choices[0]?.message?.content;
 
     if (!raw) {
+      return NextResponse.json({ error: "No model output" }, { status: 500 });
+    }
+
+    const json = JSON.parse(raw);
+    const parsed = ticketAnalysisResultSchema.safeParse(json);
+
+    if (!parsed.success) {
+      console.error("Invalid AI response payload", {
+        details: parsed.error.flatten(),
+        json,
+      });
+
       return NextResponse.json(
-        { error: "Model returned no content" },
-        { status: 500 }
+        { error: "Invalid AI response", details: parsed.error.flatten(), raw },
+        { status: 500 },
       );
     }
 
-    const parsedTicket = normalizedTicketSchema.safeParse(JSON.parse(raw));
+    const result = parsed.data;
 
-    if (!parsedTicket.success) {
-      return NextResponse.json(
-        {
-          error: "Model returned invalid ticket structure",
-          details: parsedTicket.error.flatten(),
-          raw,
-        },
-        { status: 500 }
-      );
-    }
+    normalizeTicketNulls(result.ticket);
 
-    return NextResponse.json({
-      ticket: parsedTicket.data,
-    });
+    const t = result.ticket;
+
+    t.kind = normalizeKind(t.kind);
+
+    t.priorityNormalized = normalizePriority(
+      t.priorityRaw ?? t.priorityNormalized ?? undefined,
+    );
+
+    t.statusCategory = normalizeStatusCategory(
+      t.statusRaw ?? t.statusCategory ?? undefined,
+    );
+
+    t.source = source;
+    t.extractedFromScreenshots = true;
+    t.sourceScreenshotsCount = images.length;
+
+    result.missingCriticalFields = getMissingCriticalFields(t);
+    t.missingCriticalFields = result.missingCriticalFields;
+
+    const fallbackNotes = buildFallbackNotes(t);
+    result.notes = Array.from(new Set([...result.notes, ...fallbackNotes]));
+
+    return NextResponse.json(result);
   } catch (error) {
-    console.error("analyze-ticket error", error);
+    console.error(error);
 
     return NextResponse.json(
       { error: "Failed to analyze ticket" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

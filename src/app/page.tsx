@@ -6,22 +6,29 @@ import ImagePreviewList from "@/components/ImagePreviewList";
 import TicketTypeSelector from "@/components/TicketTypeSelector";
 import ExtractionReviewForm from "@/components/ExtractionReviewForm";
 import FinalTicketPreview from "@/components/FinalTicketPreview";
+import AnalysisInsights from "@/components/AnalysisInsights";
 import { fileToDataUrl } from "@/lib/fileToDataUrl";
-import type { NormalizedTicket, TicketSource } from "@/types/ticket";
+import type {
+  TicketAnalysisResult,
+  TicketSource,
+  UniversalTicket,
+} from "@/types/universal-ticket";
 
 export default function Home() {
   const [files, setFiles] = useState<File[]>([]);
   const [source, setSource] = useState<TicketSource>("jira");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [draftTicket, setDraftTicket] = useState<NormalizedTicket | null>(null);
-  const [confirmedTicket, setConfirmedTicket] = useState<NormalizedTicket | null>(null);
+  const [analysisResult, setAnalysisResult] =
+    useState<TicketAnalysisResult | null>(null);
+  const [confirmedTicket, setConfirmedTicket] =
+    useState<UniversalTicket | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleAnalyze() {
     try {
       setError(null);
       setConfirmedTicket(null);
-      setDraftTicket(null);
+      setAnalysisResult(null);
 
       if (!files.length) {
         setError("Please upload at least one screenshot.");
@@ -46,10 +53,10 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to analyze ticket");
+        throw new Error(data.error || "Failed to analyze ticket.");
       }
 
-      setDraftTicket(data.ticket);
+      setAnalysisResult(data);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong.";
@@ -57,6 +64,10 @@ export default function Home() {
     } finally {
       setIsAnalyzing(false);
     }
+  }
+
+  function handleConfirmTicket(ticket: UniversalTicket) {
+    setConfirmedTicket(ticket);
   }
 
   return (
@@ -87,10 +98,12 @@ export default function Home() {
           </div>
         ) : null}
 
-        {draftTicket && !confirmedTicket ? (
+        {analysisResult ? <AnalysisInsights result={analysisResult} /> : null}
+
+        {analysisResult && !confirmedTicket ? (
           <ExtractionReviewForm
-            initialTicket={draftTicket}
-            onConfirm={setConfirmedTicket}
+            initialTicket={analysisResult.ticket}
+            onConfirm={handleConfirmTicket}
           />
         ) : null}
 

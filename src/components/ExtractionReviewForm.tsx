@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import type { NormalizedTicket } from "@/types/ticket";
+import type { UniversalTicket } from "@/types/universal-ticket";
 
 type Props = {
-  initialTicket: NormalizedTicket;
-  onConfirm: (ticket: NormalizedTicket) => void;
+  initialTicket: UniversalTicket;
+  onConfirm: (ticket: UniversalTicket) => void;
 };
 
 function splitLines(value: string) {
@@ -23,7 +23,7 @@ export default function ExtractionReviewForm({
   initialTicket,
   onConfirm,
 }: Props) {
-  const [ticket, setTicket] = useState<NormalizedTicket>(initialTicket);
+  const [ticket, setTicket] = useState<UniversalTicket>(initialTicket);
   const fieldIdPrefix = useId();
 
   useEffect(() => {
@@ -37,6 +37,7 @@ export default function ExtractionReviewForm({
   return (
     <section className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
       <h2 className="text-2xl font-semibold">Review extracted ticket</h2>
+
       <p className="mt-2 text-sm text-zinc-400">
         Confirm or edit the extracted fields before creating the final ticket.
       </p>
@@ -55,9 +56,11 @@ export default function ExtractionReviewForm({
           >
             Title
           </label>
+
           <input
             id={fieldId("title")}
             type="text"
+            placeholder="Ticket title"
             value={ticket.title}
             onChange={(e) => setTicket({ ...ticket, title: e.target.value })}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
@@ -70,18 +73,23 @@ export default function ExtractionReviewForm({
               htmlFor={fieldId("ticket-id")}
               className="mb-2 block text-sm font-medium"
             >
-              Ticket ID
+              Ticket key / ID
             </label>
+
             <input
               id={fieldId("ticket-id")}
               type="text"
-              value={ticket.ticketId ?? ""}
-              onChange={(e) =>
+              placeholder="ABC-123"
+              value={ticket.key ?? ticket.id ?? ""}
+              onChange={(e) => {
+                const ticketId = e.target.value.trim() || undefined;
+
                 setTicket({
                   ...ticket,
-                  ticketId: e.target.value.trim() ? e.target.value : undefined,
-                })
-              }
+                  key: ticketId,
+                  id: ticketId,
+                });
+              }}
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
             />
           </div>
@@ -93,14 +101,16 @@ export default function ExtractionReviewForm({
             >
               Priority
             </label>
+
             <input
               id={fieldId("priority")}
               type="text"
-              value={ticket.priority ?? ""}
+              placeholder="High"
+              value={ticket.priorityRaw ?? ""}
               onChange={(e) =>
                 setTicket({
                   ...ticket,
-                  priority: e.target.value.trim() ? e.target.value : undefined,
+                  priorityRaw: e.target.value.trim() || undefined,
                 })
               }
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
@@ -116,11 +126,13 @@ export default function ExtractionReviewForm({
             >
               Story points
             </label>
+
             <input
               id={fieldId("story-points")}
               type="number"
               min={0}
               step={1}
+              placeholder="5"
               value={ticket.storyPoints ?? ""}
               onChange={(e) => {
                 const value = e.target.value;
@@ -145,14 +157,16 @@ export default function ExtractionReviewForm({
             >
               Assignee
             </label>
+
             <input
               id={fieldId("assignee")}
               type="text"
+              placeholder="John Doe"
               value={ticket.assignee ?? ""}
               onChange={(e) =>
                 setTicket({
                   ...ticket,
-                  assignee: e.target.value.trim() ? e.target.value : undefined,
+                  assignee: e.target.value.trim() || undefined,
                 })
               }
               className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
@@ -167,13 +181,15 @@ export default function ExtractionReviewForm({
           >
             Description
           </label>
+
           <textarea
             id={fieldId("description")}
+            placeholder="Ticket description..."
             value={ticket.description ?? ""}
             onChange={(e) =>
               setTicket({
                 ...ticket,
-                description: e.target.value.trim() ? e.target.value : undefined,
+                description: e.target.value.trim() || undefined,
               })
             }
             rows={6}
@@ -188,55 +204,15 @@ export default function ExtractionReviewForm({
           >
             Acceptance criteria (one per line)
           </label>
+
           <textarea
             id={fieldId("acceptance-criteria")}
+            placeholder="User can log in"
             value={joinLines(ticket.acceptanceCriteria)}
             onChange={(e) =>
               setTicket({
                 ...ticket,
                 acceptanceCriteria: splitLines(e.target.value),
-              })
-            }
-            rows={5}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
-          />
-        </div>
-
-        <div>
-          <label
-            htmlFor={fieldId("labels")}
-            className="mb-2 block text-sm font-medium"
-          >
-            Labels (one per line)
-          </label>
-          <textarea
-            id={fieldId("labels")}
-            value={joinLines(ticket.labels)}
-            onChange={(e) =>
-              setTicket({
-                ...ticket,
-                labels: splitLines(e.target.value),
-              })
-            }
-            rows={4}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"
-          />
-        </div>
-
-        <div>
-          <label
-            htmlFor={fieldId("comments")}
-            className="mb-2 block text-sm font-medium"
-          >
-            Comments (one per line)
-          </label>
-          <textarea
-            id={fieldId("comments")}
-            value={joinLines(ticket.comments)}
-            onChange={(e) =>
-              setTicket({
-                ...ticket,
-                comments: splitLines(e.target.value),
               })
             }
             rows={5}
