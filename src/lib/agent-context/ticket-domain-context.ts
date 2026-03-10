@@ -32,7 +32,7 @@ Ticket system knowledge:
 
 Jira:
 - Jira uses issues.
-- Common fields include issue key, project, summary/title, description, issue type, status, priority, assignee, reporter, labels, comments, attachments, story points, sprint, epic link, parent, components, fix versions, and custom fields.
+- Common fields include issue key, project, title, description, issue type, status, priority, assignee, reporter, labels, comments, attachments, story points, sprint, epic link, parent, components, fix versions, and custom fields.
 - Common issue types include epic, story, task, bug, subtask, spike, improvement.
 - Hierarchy often follows epic → story/task/bug → subtask.
 - Required fields can vary by project configuration and custom screens.
@@ -49,7 +49,7 @@ GitHub Issues:
 - GitHub issues are generally simpler than Jira/Azure work items but still contain planning and collaboration metadata.
 
 Field semantics:
-- title / summary: short statement of the work
+- title : short statement of the work
 - description / body / details: main explanation of the work
 - acceptanceCriteria: completion conditions
 - reproductionSteps: steps to reproduce a bug

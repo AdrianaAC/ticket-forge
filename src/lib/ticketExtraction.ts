@@ -7,7 +7,7 @@ export function buildSourceSpecificGuidance(source: TicketSource) {
 This is a Jira ticket screenshot.
 Common fields may include:
 - issue key
-- summary/title
+- title
 - description
 - acceptance criteria
 - labels

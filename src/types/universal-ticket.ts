@@ -9,8 +9,10 @@ export interface UniversalTicket {
   kind: string;
   title: string;
   description?: string;
+  status?: string;
   statusRaw?: string;
   statusCategory: string;
+  priority?: string;
   priorityRaw?: string;
   priorityNormalized?: string;
   assignee?: string;
@@ -49,10 +51,12 @@ export interface UniversalTicket {
   }>;
   extractedFromScreenshots: boolean;
   sourceScreenshotsCount?: number;
+  rawText?: string;
   rawExtractedText?: string;
   fieldConfidence?: Partial<Record<string, number>>;
   missingCriticalFields?: string[];
   customFields?: Record<string, string | number | boolean | string[] | null>;
+  fields?: Record<string, unknown>;
 }
 
 export interface TicketAnalysisResult {
