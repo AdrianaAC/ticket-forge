@@ -1,4 +1,3 @@
-// lib/tickets/schema-validation.ts
 import type { UniversalTicket } from "@/types/universal-ticket";
 import { getTicketFieldValue } from "@/lib/tickets/ticket-field-helpers";
 
@@ -6,9 +5,7 @@ type SchemaField = {
   required?: boolean;
 };
 
-type Schema = {
-  fields: Record<string, SchemaField>;
-};
+type FlatSchema = Record<string, SchemaField>;
 
 export function isEmptyValue(value: string) {
   return value.trim() === "";
@@ -16,9 +13,9 @@ export function isEmptyValue(value: string) {
 
 export function getMissingRequiredFields(
   ticket: UniversalTicket,
-  schema: Schema
+  fields: FlatSchema,
 ): string[] {
-  return Object.entries(schema.fields)
+  return Object.entries(fields)
     .filter(([, fieldDef]) => fieldDef.required)
     .map(([fieldKey]) => fieldKey)
     .filter((fieldKey) => isEmptyValue(getTicketFieldValue(ticket, fieldKey)));
@@ -26,7 +23,7 @@ export function getMissingRequiredFields(
 
 export function hasMissingRequiredFields(
   ticket: UniversalTicket,
-  schema: Schema
+  fields: FlatSchema,
 ): boolean {
-  return getMissingRequiredFields(ticket, schema).length > 0;
+  return getMissingRequiredFields(ticket, fields).length > 0;
 }

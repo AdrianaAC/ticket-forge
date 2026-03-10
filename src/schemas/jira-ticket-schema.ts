@@ -1,80 +1,269 @@
-// lib/schemas/jira-ticket-schema.ts
 export const jiraTicketSchema = {
-  entity: "jira_ticket",
-  required_fields: ["space", "work_type", "request_type", "title"],
-  fields: {
-    space: {
+  entity: "jira_issue",
+  description:
+    "Schema for a Jira issue/work item with core Jira fields plus instance-specific custom fields.",
+
+  core: {
+    project: {
       type: "string",
       input_type: "dropdown",
       required: true,
       description:
-        "Project space where the ticket will be created. Determines workflows, permissions, and configuration.",
-      allowed_values: ["personal (PER)", "Demo service space (DEMO)"],
+        "Project or space where the issue will be created.",
+      examples: ["personal (PER)", "Demo service space (DEMO)"],
       allow_custom_values: true,
     },
-    work_type: {
-      type: "string",
-      input_type: "dropdown",
-      required: true,
-      description: "Defines the type of work item and associated workflow.",
-      allowed_values: [
-        "Task",
-        "[System] Service request",
-        "[System] Incident",
-        "[System] Service request with approvals",
-      ],
-      allow_custom_values: false,
-    },
-    request_type: {
+
+    issue_type: {
       type: "string",
       input_type: "dropdown",
       required: true,
       description:
-        "Defines the service desk request category visible in the customer portal.",
-      allowed_values: ["No request type"],
+        "Type of Jira work item.",
+      allowed_values: ["Epic", "Task", "Story", "Bug", "Sub-task"],
       allow_custom_values: true,
     },
+
     title: {
       type: "string",
       input_type: "text",
       required: true,
-      description: "Short title describing the task or issue.",
+      description:
+        "Short title describing the issue or task.",
     },
+
     description: {
       type: "string",
       input_type: "rich_text",
       required: false,
       description:
-        "Detailed explanation of the task including reproduction steps, context, and technical notes.",
+        "Detailed explanation of the issue, task, reproduction steps, or acceptance criteria.",
     },
+
+    assignee: {
+      type: "user",
+      input_type: "user_selector",
+      required: false,
+      description:
+        "User responsible for the issue.",
+    },
+
+    status: {
+      type: "string",
+      input_type: "dropdown",
+      required: false,
+      description:
+        "Current workflow status of the issue.",
+      allow_custom_values: true,
+    },
+
     priority: {
       type: "string",
       input_type: "dropdown",
       required: false,
-      description: "Relative importance of the issue.",
-      allowed_values: ["Highest", "High", "Medium", "Low", "Lowest"],
+      description:
+        "Relative importance of the issue.",
       allow_custom_values: true,
     },
+
+    due_date: {
+      type: "date",
+      input_type: "date_picker",
+      required: false,
+      description:
+        "Deadline for completing the issue.",
+    },
+
+    attachments: {
+      type: "array",
+      input_type: "file_upload",
+      required: false,
+      items: {
+        type: "file",
+      },
+      description:
+        "Files attached to the issue, such as screenshots, logs, or documents.",
+    },
+  },
+
+  relationships: {
+    parent: {
+      type: "string",
+      input_type: "issue_selector",
+      required: false,
+      description:
+        "Parent issue above this one in the hierarchy.",
+    },
+
+    linked_issues: {
+      type: "array",
+      input_type: "relationship_selector",
+      required: false,
+      description:
+        "Links between this issue and other Jira issues.",
+      items: {
+        type: "object",
+        properties: {
+          relation_type: {
+            type: "string",
+            allowed_values: [
+              "blocks",
+              "is blocked by",
+              "clones",
+              "is cloned by",
+              "duplicates",
+              "is duplicated by",
+              "relates to",
+            ],
+          },
+          issue_key: {
+            type: "string",
+          },
+        },
+      },
+    },
+  },
+
+  custom_fields: {
+    request_type: {
+      type: "string",
+      input_type: "dropdown",
+      required: false,
+      description:
+        "Project-specific or service-desk-specific request classification.",
+      allow_custom_values: true,
+    },
+
+    components: {
+      type: "array",
+      input_type: "dropdown",
+      required: false,
+      items: {
+        type: "string",
+      },
+      description:
+        "Project components or service areas associated with the issue.",
+      allow_custom_values: true,
+    },
+
+    team: {
+      type: "string",
+      input_type: "dropdown",
+      required: false,
+      description:
+        "Team associated with the issue.",
+      allow_custom_values: true,
+    },
+
+    labels: {
+      type: "array",
+      input_type: "tag_selector",
+      required: false,
+      items: {
+        type: "string",
+      },
+      description:
+        "Custom labels or tags used to categorize the issue.",
+    },
+
+    affected_services: {
+      type: "array",
+      input_type: "dropdown",
+      required: false,
+      items: {
+        type: "string",
+      },
+      description:
+        "Services impacted by the issue.",
+      allow_custom_values: true,
+    },
+
     urgency: {
       type: "string",
       input_type: "dropdown",
       required: false,
-      description: "How quickly the issue must be addressed.",
-      allowed_values: ["Critical", "High", "Medium", "Low"],
+      description:
+        "How quickly the issue needs attention.",
       allow_custom_values: true,
     },
+
     impact: {
       type: "string",
       input_type: "dropdown",
       required: false,
-      description: "Scale of the issue in terms of affected users or services.",
-      allowed_values: [
-        "Extensive / Widespread",
-        "Significant / Large",
-        "Moderate / Limited",
-        "Minor / Localized",
-      ],
+      description:
+        "Scale or breadth of impact caused by the issue.",
       allow_custom_values: true,
+    },
+
+    pending_reason: {
+      type: "string",
+      input_type: "dropdown",
+      required: false,
+      description:
+        "Reason the issue is currently pending.",
+      allow_custom_values: true,
+    },
+
+    approver_groups: {
+      type: "array",
+      input_type: "group_selector",
+      required: false,
+      items: {
+        type: "string",
+      },
+      description:
+        "Groups required to approve the request.",
+    },
+
+    approvers: {
+      type: "array",
+      input_type: "user_selector",
+      required: false,
+      items: {
+        type: "user",
+      },
+      description:
+        "Individual users required to approve the request.",
+    },
+
+    organizations: {
+      type: "array",
+      input_type: "dropdown",
+      required: false,
+      items: {
+        type: "string",
+      },
+      description:
+        "Organizations associated with the request.",
+      allow_custom_values: true,
+    },
+
+    request_language: {
+      type: "string",
+      input_type: "text",
+      required: false,
+      description:
+        "Language in which the request was raised.",
+    },
+
+    original_estimate: {
+      type: "string",
+      input_type: "text",
+      required: false,
+      pattern: "([0-9]+w)? ?([0-9]+d)? ?([0-9]+h)? ?([0-9]+m)?",
+      example: "2w 1d 5h 4m",
+      description:
+        "Estimated amount of work required to complete the issue.",
+    },
+
+    creator: {
+      type: "user",
+      input_type: "user_selector",
+      required: false,
+      auto_populated: true,
+      description:
+        "User who created the issue.",
     },
   },
 } as const;

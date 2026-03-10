@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { UniversalTicket } from "@/types/universal-ticket";
 import TicketTemplatePreview from "@/components/tickets/TicketTemplatePreview";
 import JiraSchemaReviewFields from "@/components/tickets/JiraSchemaReviewFields";
-import { jiraTicketSchema } from "@/schemas/jira-ticket-schema";
+import { getJiraRenderFields } from "@/schemas/get-jira-render-fields";
 import {
   getMissingRequiredFields,
   hasMissingRequiredFields,
@@ -27,15 +27,17 @@ export default function ExtractionReviewForm({
 
   const isJiraTicket = ticket.source === "jira";
 
+  const jiraRenderFields = useMemo(() => getJiraRenderFields(), []);
+
   const missingRequiredFields = useMemo(() => {
     if (!isJiraTicket) return [];
-    return getMissingRequiredFields(ticket, jiraTicketSchema);
-  }, [ticket, isJiraTicket]);
+    return getMissingRequiredFields(ticket, jiraRenderFields);
+  }, [ticket, isJiraTicket, jiraRenderFields]);
 
   const isConfirmDisabled = useMemo(() => {
     if (!isJiraTicket) return false;
-    return hasMissingRequiredFields(ticket, jiraTicketSchema);
-  }, [ticket, isJiraTicket]);
+    return hasMissingRequiredFields(ticket, jiraRenderFields);
+  }, [ticket, isJiraTicket, jiraRenderFields]);
 
   return (
     <section className="mt-8">

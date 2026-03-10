@@ -8,6 +8,7 @@ import {
   setTicketFieldValue,
 } from "@/lib/tickets/ticket-field-helpers";
 import EditableDropdown from "@/components/EditableDropdown";
+import { getJiraRenderFields } from "@/schemas/get-jira-render-fields";
 
 type Props = {
   ticket: UniversalTicket;
@@ -26,7 +27,8 @@ function isEmpty(value: string) {
 }
 
 export default function JiraSchemaReviewFields({ ticket, onChange }: Props) {
-  const entries = Object.entries(jiraTicketSchema.fields);
+  const renderFields = getJiraRenderFields();
+  const entries = Object.entries(renderFields);
 
   const [customOptions, setCustomOptions] = useState<Record<string, string[]>>(
     {},

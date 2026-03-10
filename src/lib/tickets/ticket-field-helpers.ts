@@ -7,7 +7,6 @@ const TOP_LEVEL_FIELDS = new Set([
   "priority",
   "assignee",
   "status",
-  "title",
 ]);
 
 export function getTicketFieldValue(
