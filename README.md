@@ -15,7 +15,7 @@ Ticket Forge removes the friction of manually reading tickets from screenshots, 
 
 # Demo
 
-![Ticket Forge Demo](./public/demo.gif)
+![Ticket Forge Demo](./ticket-forge.gif)
 
 ---
 
