@@ -1,0 +1,261 @@
+{
+  "ticket_schema": {
+    "entity": "jira_ticket",
+    "description": "Structured schema representing the fields available when creating a Jira task.",
+    "required_fields": [
+      "space",
+      "work_type",
+      "request_type",
+      "title"
+    ],
+    "fields": {
+      "space": {
+        "type": "string",
+        "input_type": "dropdown",
+        "required": true,
+        "examples": [
+          "personal (PER)",
+          "Demo service space (DEMO)"
+        ],
+        "description": "Project space where the ticket will be created. Determines workflows, permissions, and configuration."
+      },
+
+      "work_type": {
+        "type": "string",
+        "input_type": "dropdown",
+        "required": true,
+        "allowed_values": [
+          "Tarefa",
+          "[System] Service request",
+          "[System] Incident",
+          "[System] Service request with approvals"
+        ],
+        "description": "Defines the type of work item and associated workflow."
+      },
+
+      "request_type": {
+        "type": "string",
+        "input_type": "dropdown",
+        "required": true,
+        "allowed_values": [
+          "No request type"
+        ],
+        "description": "Defines the service desk request category visible in the customer portal."
+      },
+
+      "title": {
+        "type": "string",
+        "input_type": "text",
+        "required": true,
+        "description": "Short title describing the task or issue."
+      },
+
+      "components": {
+        "type": "string",
+        "input_type": "dropdown",
+        "required": false,
+        "examples": [
+          "Active Directory",
+          "Analytics and Reporting Service",
+          "Billing Services",
+          "Cloud Storage Services",
+          "Data Center Services",
+          "Email and Collaboration Services",
+          "Financial Services",
+          "HR Services",
+          "Intranet"
+        ],
+        "description": "System component or service associated with the issue."
+      },
+
+      "attachments": {
+        "type": "array",
+        "input_type": "file_upload",
+        "required": false,
+        "items": {
+          "type": "file"
+        },
+        "description": "Files attached to the issue such as screenshots, logs, or documents."
+      },
+
+      "due_date": {
+        "type": "date",
+        "input_type": "date_picker",
+        "required": false,
+        "description": "Deadline by which the issue should be completed."
+      },
+
+      "description": {
+        "type": "string",
+        "input_type": "rich_text",
+        "required": false,
+        "description": "Detailed explanation of the task including reproduction steps, context, and technical notes."
+      },
+
+      "creator": {
+        "type": "user",
+        "input_type": "user_selector",
+        "required": false,
+        "auto_populated": true,
+        "description": "User who created the issue."
+      },
+
+      "linked_work_items": {
+        "type": "object",
+        "input_type": "relationship_selector",
+        "required": false,
+        "properties": {
+          "relation_type": {
+            "type": "string",
+            "allowed_values": [
+              "blocks",
+              "is blocked by",
+              "clones",
+              "is cloned by",
+              "duplicates",
+              "is duplicated by",
+              "causes",
+              "is caused by",
+              "relates to"
+            ]
+          },
+          "issue_key": {
+            "type": "string"
+          }
+        },
+        "description": "Defines relationships between this ticket and other Jira issues."
+      },
+
+      "assignee": {
+        "type": "user",
+        "input_type": "user_selector",
+        "required": false,
+        "default": "automatic",
+        "description": "User responsible for resolving the issue."
+      },
+
+      "priority": {
+        "type": "string",
+        "input_type": "dropdown",
+        "required": false,
+        "allowed_values": [
+          "Highest",
+          "High",
+          "Medium",
+          "Low",
+          "Lowest"
+        ],
+        "description": "Relative importance of the issue."
+      },
+
+      "team": {
+        "type": "string",
+        "input_type": "dropdown",
+        "required": false,
+        "description": "Team responsible for the issue."
+      },
+
+      "labels": {
+        "type": "array",
+        "input_type": "tag_selector",
+        "required": false,
+        "items": {
+          "type": "string"
+        },
+        "description": "Custom tags used to categorize issues."
+      },
+
+      "affected_services": {
+        "type": "string",
+        "input_type": "dropdown",
+        "required": false,
+        "description": "Service impacted by the issue."
+      },
+
+      "urgency": {
+        "type": "string",
+        "input_type": "dropdown",
+        "required": false,
+        "allowed_values": [
+          "Critical",
+          "High",
+          "Medium",
+          "Low"
+        ],
+        "description": "How quickly the issue must be addressed."
+      },
+
+      "impact": {
+        "type": "string",
+        "input_type": "dropdown",
+        "required": false,
+        "allowed_values": [
+          "Extensive / Widespread",
+          "Significant / Large",
+          "Moderate / Limited",
+          "Minor / Localized"
+        ],
+        "description": "Scale of the issue in terms of affected users or services."
+      },
+
+      "pending_reason": {
+        "type": "string",
+        "input_type": "dropdown",
+        "required": false,
+        "allowed_values": [
+          "More info required",
+          "Awaiting approval",
+          "Waiting on vendor",
+          "Pending on change request"
+        ],
+        "description": "Reason the issue is currently in a pending state."
+      },
+
+      "approver_groups": {
+        "type": "array",
+        "input_type": "group_selector",
+        "required": false,
+        "items": {
+          "type": "string"
+        },
+        "description": "Groups of users that must approve the request."
+      },
+
+      "request_language": {
+        "type": "string",
+        "input_type": "text",
+        "required": false,
+        "description": "Language used when the request was created."
+      },
+
+      "original_estimate": {
+        "type": "string",
+        "input_type": "text",
+        "required": false,
+        "pattern": "([0-9]+w)? ?([0-9]+d)? ?([0-9]+h)? ?([0-9]+m)?",
+        "example": "2w 1d 5h 4m",
+        "description": "Estimated amount of work required to complete the issue."
+      },
+
+      "approvers": {
+        "type": "array",
+        "input_type": "user_selector",
+        "required": false,
+        "items": {
+          "type": "user"
+        },
+        "description": "Users required to approve the issue."
+      },
+
+      "organizations": {
+        "type": "array",
+        "input_type": "dropdown",
+        "required": false,
+        "items": {
+          "type": "string"
+        },
+        "description": "Customer organizations associated with the request."
+      }
+    }
+  }
+}
