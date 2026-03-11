@@ -66,6 +66,17 @@ Field semantics:
 - sprint / iteration / milestone: planning container
 - parent / epic / children: hierarchy relationships
 - labels / components / areaPath / iterationPath / fixVersions: categorization metadata
+- customFields: visible platform metadata that does not fit first-class fields (for example created_at, updated_at, watchers, votes)
+
+Detection heuristics:
+- Ticket keys commonly match PROJECT-123. If visible, extract both key and id.
+- If key format PROJECT-123 is visible and no better project label is shown, project can be inferred as PROJECT.
+- In Jira, issue type clues appear near the key/title and in actions like "Add epic", "Add child issue", "Sub-task".
+- If a "child issues" section is visible, extract every visible row into children with key/title and kind when shown.
+- Status is often in the top-right workflow control; capture exact text in statusRaw.
+- Priority is often in details/sidebar; capture exact text in priorityRaw.
+- Assignee, reporter, creator, and timeline metadata are often in details/sidebar blocks.
+- If created/updated timestamps are visible, store them in customFields as created_at and updated_at.
 
 Important behavioral rules:
 - You are not only extracting text. You understand agile workflow semantics.

@@ -13,11 +13,64 @@ import { ticketDomainContext } from "@/lib/agent-context/ticket-domain-context";
 import { buildFallbackNotes } from "@/lib/ticket-notes";
 import { normalizeTicketNulls } from "@/lib/utils/ticket-null-normalizer";
 import { validateTicketSchema } from "@/lib/utils/ticket-schema-self-test";
+import type { UniversalTicket } from "@/types/universal-ticket";
 
 const requestSchema = z.object({
   source: z.enum(["jira", "azure", "github", "unknown"]),
   images: z.array(z.string()).min(1),
 });
+
+const CREATED_FIELD_ALIASES = [
+  "created_at",
+  "createdAt",
+  "created",
+  "created_date",
+  "createdDate",
+];
+
+const UPDATED_FIELD_ALIASES = [
+  "updated_at",
+  "updatedAt",
+  "updated",
+  "updated_date",
+  "updatedDate",
+];
+
+const LOW_CONFIDENCE_DEFAULT = 0.6;
+
+function promoteCustomFieldAlias(
+  customFields: Record<string, string | number | boolean | string[] | null>,
+  aliases: string[],
+  canonicalKey: string,
+) {
+  if (customFields[canonicalKey] != null) return;
+
+  for (const alias of aliases) {
+    const value = customFields[alias];
+    if (value != null) {
+      customFields[canonicalKey] = value;
+      return;
+    }
+  }
+}
+
+function mapLowConfidenceFieldAliases(field: string): string[] {
+  const normalized = field.trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+  switch (normalized) {
+    case "issue_type":
+    case "type":
+      return ["kind", "issue_type", "type"];
+    case "status":
+      return ["statusRaw", "status"];
+    case "priority":
+      return ["priorityRaw", "priorityNormalized", "priority"];
+    case "ticket_key":
+      return ["key", "id"];
+    default:
+      return [field, normalized];
+  }
+}
 
 export async function POST(request: Request) {
   validateTicketSchema();
@@ -35,63 +88,74 @@ export async function POST(request: Request) {
 
     const { source, images } = parsedBody.data;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
-      response_format: {
-        type: "json_schema",
-        json_schema: ticketAnalysisJsonSchema,
-      },
-      messages: [
-        {
-          role: "system",
-          content: ticketDomainContext,
-        },
+    const prompt = `
+Analyze these screenshots as a ${source} ticket.
+
+Your task:
+- identify and extract all visible ticket fields
+- preserve platform-specific meanings exactly as shown
+- normalize values into the required TicketAnalysisResult schema
+- never invent values that are not visible
+- if a field is missing, set it to null/[] and include it in missingCriticalFields when relevant
+- if a field is visible but uncertain (blurred/cropped), include it in lowConfidenceFields
+- include useful extraction concerns in extractionWarnings
+- include short factual notes in notes only when they help review
+
+Extraction heuristics:
+- Ticket key/id often matches PROJECT-123. If visible, extract both ticket.key and ticket.id.
+- If key follows PROJECT-123 and project is visible in the key, set ticket.project to PROJECT unless a clearer project name is shown.
+- For Jira issue type, check labels near the key/title and action text like "Add epic", "Add child issue", "Sub-task".
+- If a "child issues" list or linked child rows are visible, extract every visible child into ticket.children with key/title/kind (kind if visible).
+- If parent/epic references are visible, populate parentKey/parentTitle and epicKey/epicTitle.
+- Status is often near the top-right workflow control; preserve the exact raw label in statusRaw.
+- Priority often appears in a details/sidebar panel; preserve exact raw text in priorityRaw.
+- Assignee, Reporter, and Creator are often in details/sidebar sections.
+- If created/updated timestamps are visible, store them in ticket.customFields as created_at and updated_at.
+- Preserve all visible labels/components/fix versions/comments.
+- Keep exact casing and wording from the screenshot whenever possible.
+- If content appears cropped or truncated, mention that in extractionWarnings.
+
+Focus especially on:
+- title, ticket key/id, issue type
+- description, acceptance criteria, reproduction steps
+- status, priority, assignee/reporter/creator
+- labels, components, fix versions
+- planning fields (sprint, story points, estimates, due date)
+- hierarchy fields (parent, epic, children)
+
+Return only valid JSON matching the schema.
+`.trim();
+
+    const response = await openai.responses.create({
+      model: process.env.OPENAI_TICKET_MODEL ?? "gpt-4.1",
+      instructions: ticketDomainContext,
+      input: [
         {
           role: "user",
           content: [
             {
-              type: "text",
-              text: `
-Analyze these screenshots as a ${source} ticket.
-
-Your task:
-- identify the visible ticket fields
-- preserve platform-specific meanings
-- normalize them into the required TicketAnalysisResult schema
-- do not invent values
-- if information is missing, list it in missingCriticalFields
-- if information is unclear or partially visible, list it in lowConfidenceFields
-- include useful extraction concerns in extractionWarnings
-- include short analyst notes in notes when they help the user review the extraction
-
-Focus especially on:
-- title
-- ticket key or id
-- issue/work item type
-- description
-- acceptance criteria
-- priority
-- status
-- assignee
-- labels
-- comments
-- planning fields like sprint, story points, estimates
-- hierarchy fields like parent or epic
-- bug-specific fields like reproduction steps, expected behavior, actual behavior
-
-Return only valid JSON matching the schema.
-`.trim(),
+              type: "input_text",
+              text: prompt,
             },
             ...images.map((image) => ({
-              type: "image_url" as const,
-              image_url: { url: image },
+              type: "input_image" as const,
+              image_url: image,
+              detail: "high" as const,
             })),
           ],
         },
       ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: ticketAnalysisJsonSchema.name,
+          strict: ticketAnalysisJsonSchema.strict,
+          schema: ticketAnalysisJsonSchema.schema,
+        },
+      },
     });
 
-    const raw = response.choices[0]?.message?.content;
+    const raw = response.output_text?.trim();
 
     if (!raw) {
       return NextResponse.json({ error: "No model output" }, { status: 500 });
@@ -114,9 +178,7 @@ Return only valid JSON matching the schema.
 
     const result = parsed.data;
 
-    normalizeTicketNulls(result.ticket);
-
-    const t = result.ticket;
+    const t = normalizeTicketNulls(result.ticket) as unknown as UniversalTicket;
 
     t.kind = normalizeKind(t.kind);
 
@@ -131,6 +193,37 @@ Return only valid JSON matching the schema.
     t.source = source;
     t.extractedFromScreenshots = true;
     t.sourceScreenshotsCount = images.length;
+
+    if (!t.key && t.id) t.key = t.id;
+    if (!t.id && t.key) t.id = t.key;
+
+    const keyLike = (t.key ?? t.id)?.trim();
+    if (!t.project && keyLike) {
+      const projectMatch = keyLike.match(/^([A-Z][A-Z0-9]+)-\d+$/i);
+      if (projectMatch) {
+        t.project = projectMatch[1].toUpperCase();
+      }
+    }
+
+    const customFields = (t.customFields ??= {});
+    promoteCustomFieldAlias(customFields, CREATED_FIELD_ALIASES, "created_at");
+    promoteCustomFieldAlias(customFields, UPDATED_FIELD_ALIASES, "updated_at");
+
+    const lowConfidenceScores = t.fieldConfidence ?? {};
+    for (const field of result.lowConfidenceFields) {
+      for (const alias of mapLowConfidenceFieldAliases(field)) {
+        const existing = lowConfidenceScores[alias];
+        if (typeof existing === "number") {
+          lowConfidenceScores[alias] = Math.min(existing, LOW_CONFIDENCE_DEFAULT);
+        } else {
+          lowConfidenceScores[alias] = LOW_CONFIDENCE_DEFAULT;
+        }
+      }
+    }
+    t.fieldConfidence =
+      Object.keys(lowConfidenceScores).length > 0
+        ? lowConfidenceScores
+        : undefined;
 
     result.missingCriticalFields = getMissingCriticalFields(t);
     t.missingCriticalFields = result.missingCriticalFields;

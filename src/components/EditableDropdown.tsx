@@ -8,6 +8,7 @@ type Props = {
   options: string[];
   placeholder?: string;
   invalid?: boolean;
+  warning?: boolean;
   onChange: (value: string) => void;
   onAddOption: (value: string) => void;
   disabled?: boolean;
@@ -18,6 +19,7 @@ export default function EditableDropdown({
   options,
   placeholder = "Choose an option",
   invalid = false,
+  warning = false,
   onChange,
   onAddOption,
   disabled = false,
@@ -70,6 +72,8 @@ export default function EditableDropdown({
           "flex w-full items-center gap-2 rounded-xl border bg-zinc-950 px-3 py-2 text-sm",
           invalid
             ? "border-red-500 focus-within:border-red-400"
+            : warning
+              ? "border-amber-700 bg-amber-950/30 focus-within:border-amber-500"
             : "border-zinc-700 focus-within:border-zinc-500",
           disabled ? "opacity-60" : "",
         ].join(" ")}
@@ -122,7 +126,10 @@ export default function EditableDropdown({
               setIsOpen(false);
             }
           }}
-          className="flex-1 bg-transparent text-white outline-none placeholder:text-zinc-500"
+          className={[
+            "flex-1 bg-transparent text-white outline-none",
+            warning ? "placeholder:text-amber-300/40" : "placeholder:text-zinc-500",
+          ].join(" ")}
         />
 
         <button

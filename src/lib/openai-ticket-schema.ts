@@ -196,15 +196,15 @@ export const ticketAnalysisJsonSchema = {
 
           extractedFromScreenshots: { type: "boolean" },
 
-          sourceScreenshotsCount: { type: ["number", "null"] },
+	          sourceScreenshotsCount: { type: ["number", "null"] },
 
-          rawExtractedText: { type: ["string", "null"] },
+	          rawExtractedText: { type: ["string", "null"] },
 
-          missingCriticalFields: {
-            type: "array",
-            items: { type: "string" },
-          },
-        },
+	          missingCriticalFields: {
+	            type: "array",
+	            items: { type: "string" },
+	          },
+	        },
 
         required: [
           "source",
@@ -244,14 +244,14 @@ export const ticketAnalysisJsonSchema = {
           "expectedBehavior",
           "actualBehavior",
           "environment",
-          "comments",
-          "attachments",
-          "extractedFromScreenshots",
-          "sourceScreenshotsCount",
-          "rawExtractedText",
-          "missingCriticalFields",
-        ],
-      },
+	          "comments",
+	          "attachments",
+	          "extractedFromScreenshots",
+	          "sourceScreenshotsCount",
+	          "rawExtractedText",
+	          "missingCriticalFields",
+	        ],
+	      },
 
       missingCriticalFields: {
         type: "array",

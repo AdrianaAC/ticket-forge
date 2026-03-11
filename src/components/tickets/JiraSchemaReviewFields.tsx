@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { jiraTicketSchema } from "@/schemas/jira-ticket-schema";
 import type { UniversalTicket } from "@/types/universal-ticket";
 import {
+  getTicketFieldConfidence,
   getTicketFieldValue,
   setTicketFieldValue,
 } from "@/lib/tickets/ticket-field-helpers";
@@ -26,9 +26,15 @@ function isEmpty(value: string) {
   return value.trim() === "";
 }
 
+function formatConfidence(confidence: number) {
+  return `${Math.round(confidence * 100)}%`;
+}
+
+const LOW_CONFIDENCE_THRESHOLD = 0.75;
+
 export default function JiraSchemaReviewFields({ ticket, onChange }: Props) {
-  const renderFields = getJiraRenderFields();
-  const entries = Object.entries(renderFields);
+  const renderFields = useMemo(() => getJiraRenderFields(), []);
+  const fieldEntries = useMemo(() => Object.entries(renderFields), [renderFields]);
 
   const [customOptions, setCustomOptions] = useState<Record<string, string[]>>(
     {},
@@ -37,7 +43,7 @@ export default function JiraSchemaReviewFields({ ticket, onChange }: Props) {
   const mergedOptions = useMemo(() => {
     const result: Record<string, string[]> = {};
 
-    for (const [fieldKey, fieldDef] of entries) {
+    for (const [fieldKey, fieldDef] of fieldEntries) {
       const baseOptions =
         "allowed_values" in fieldDef && Array.isArray(fieldDef.allowed_values)
           ? [...fieldDef.allowed_values]
@@ -49,14 +55,26 @@ export default function JiraSchemaReviewFields({ ticket, onChange }: Props) {
     }
 
     return result;
-  }, [entries, customOptions]);
+  }, [fieldEntries, customOptions]);
+
+  const lowConfidenceCount = useMemo(() => {
+    return fieldEntries.reduce((count, [fieldKey]) => {
+      const confidence = getTicketFieldConfidence(ticket, fieldKey);
+      if (
+        typeof confidence === "number" &&
+        confidence < LOW_CONFIDENCE_THRESHOLD
+      ) {
+        return count + 1;
+      }
+      return count;
+    }, 0);
+  }, [fieldEntries, ticket]);
 
   const addCustomOption = (fieldKey: string, newValue: string) => {
     const trimmed = newValue.trim();
     if (!trimmed) return;
 
-    const fieldDef =
-      jiraTicketSchema.fields[fieldKey as keyof typeof jiraTicketSchema.fields];
+    const fieldDef = renderFields[fieldKey as keyof typeof renderFields];
 
     const baseOptions =
       "allowed_values" in fieldDef && Array.isArray(fieldDef.allowed_values)
@@ -83,12 +101,27 @@ export default function JiraSchemaReviewFields({ ticket, onChange }: Props) {
     <div className="space-y-5">
       <h3 className="text-lg font-semibold text-white">Jira fields</h3>
 
+      {lowConfidenceCount > 0 ? (
+        <div className="rounded-xl border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+          {lowConfidenceCount} field
+          {lowConfidenceCount === 1 ? "" : "s"} extracted with low confidence.
+          Please verify highlighted values.
+        </div>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-2">
-        {entries.map(([fieldKey, fieldDef]) => {
+        {fieldEntries.map(([fieldKey, fieldDef]) => {
           const value = getTicketFieldValue(ticket, fieldKey);
           const label = toLabel(fieldKey);
+          const isEmptyValue = isEmpty(value);
           const isRequired = !!fieldDef.required;
-          const isInvalid = isRequired && isEmpty(value);
+          const isInvalid = isRequired && isEmptyValue;
+          const confidence = getTicketFieldConfidence(ticket, fieldKey);
+          const isLowConfidence =
+            !isInvalid &&
+            typeof confidence === "number" &&
+            confidence < LOW_CONFIDENCE_THRESHOLD;
+          const isEmptyField = isEmptyValue && !isInvalid;
 
           const baseClasses =
             "w-full rounded-xl border bg-zinc-950 px-4 py-3 text-sm text-white focus:outline-none";
@@ -96,9 +129,19 @@ export default function JiraSchemaReviewFields({ ticket, onChange }: Props) {
             "border-zinc-700 placeholder:text-zinc-500 focus:border-zinc-500";
           const invalidClasses =
             "border-red-500 text-red-100 placeholder:text-transparent focus:border-red-400";
+          const lowConfidenceClasses =
+            "border-amber-500 text-amber-100 placeholder:text-amber-300/40 focus:border-amber-400";
+          const emptyFieldClasses =
+            "border-amber-700 bg-amber-950/30 text-amber-100 placeholder:text-transparent focus:border-amber-500";
 
           const commonClasses = `${baseClasses} ${
-            isInvalid ? invalidClasses : validClasses
+            isInvalid
+              ? invalidClasses
+              : isLowConfidence
+                ? lowConfidenceClasses
+                : isEmptyField
+                  ? emptyFieldClasses
+                  : validClasses
           }`;
 
           return (
@@ -113,6 +156,11 @@ export default function JiraSchemaReviewFields({ ticket, onChange }: Props) {
                 {isRequired ? (
                   <span className="ml-1 text-red-400">*</span>
                 ) : null}
+                {isLowConfidence && typeof confidence === "number" ? (
+                  <span className="ml-2 rounded-md border border-amber-600/80 bg-amber-950/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+                    {formatConfidence(confidence)}
+                  </span>
+                ) : null}
               </label>
 
               {fieldDef.input_type === "dropdown" &&
@@ -123,6 +171,7 @@ export default function JiraSchemaReviewFields({ ticket, onChange }: Props) {
                   options={mergedOptions[fieldKey] ?? []}
                   placeholder="Choose an option"
                   invalid={isInvalid}
+                  warning={isLowConfidence || isEmptyField}
                   onChange={(newValue) =>
                     onChange(setTicketFieldValue(ticket, fieldKey, newValue))
                   }
@@ -154,7 +203,7 @@ export default function JiraSchemaReviewFields({ ticket, onChange }: Props) {
                 <textarea
                   rows={6}
                   value={value}
-                  placeholder={isInvalid ? "" : fieldDef.description}
+                  placeholder=""
                   onChange={(e) =>
                     onChange(
                       setTicketFieldValue(ticket, fieldKey, e.target.value),
@@ -166,7 +215,7 @@ export default function JiraSchemaReviewFields({ ticket, onChange }: Props) {
                 <input
                   type="text"
                   value={value}
-                  placeholder={isInvalid ? "" : fieldDef.description}
+                  placeholder=""
                   onChange={(e) =>
                     onChange(
                       setTicketFieldValue(ticket, fieldKey, e.target.value),
@@ -183,6 +232,13 @@ export default function JiraSchemaReviewFields({ ticket, onChange }: Props) {
               {isInvalid ? (
                 <p className="mt-1 text-xs text-red-400">
                   This field is required.
+                </p>
+              ) : null}
+
+              {isLowConfidence && typeof confidence === "number" ? (
+                <p className="mt-1 text-xs text-amber-400">
+                  Low confidence extraction ({formatConfidence(confidence)}).
+                  Please verify this value.
                 </p>
               ) : null}
             </div>

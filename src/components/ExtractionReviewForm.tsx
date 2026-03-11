@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { UniversalTicket } from "@/types/universal-ticket";
-import TicketTemplatePreview from "@/components/tickets/TicketTemplatePreview";
 import JiraSchemaReviewFields from "@/components/tickets/JiraSchemaReviewFields";
 import { getJiraRenderFields } from "@/schemas/get-jira-render-fields";
 import {
@@ -59,8 +58,6 @@ export default function ExtractionReviewForm({
         {isJiraTicket ? (
           <JiraSchemaReviewFields ticket={ticket} onChange={setTicket} />
         ) : null}
-
-        <TicketTemplatePreview ticket={ticket} editable onChange={setTicket} />
 
         <div className="flex justify-end">
           <button
