@@ -7,7 +7,6 @@ import TicketTypeSelector from "@/components/TicketTypeSelector";
 import ExtractionReviewForm from "@/components/ExtractionReviewForm";
 import FinalTicketPreview from "@/components/FinalTicketPreview";
 import AnalysisInsights from "@/components/AnalysisInsights";
-import { fileToDataUrl } from "@/lib/fileToDataUrl";
 import type {
   TicketAnalysisResult,
   TicketSource,
@@ -37,17 +36,15 @@ export default function Home() {
 
       setIsAnalyzing(true);
 
-      const images = await Promise.all(files.map(fileToDataUrl));
+      const formData = new FormData();
+      formData.append("source", source);
+      files.forEach((file) => {
+        formData.append("images", file, file.name);
+      });
 
       const response = await fetch("/api/analyze-ticket", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          source,
-          images,
-        }),
+        body: formData,
       });
 
       const data = await response.json();
