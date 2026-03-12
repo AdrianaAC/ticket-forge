@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { UniversalTicket } from "@/types/universal-ticket";
 import JiraSchemaReviewFields from "@/components/tickets/JiraSchemaReviewFields";
 import { getJiraRenderFields } from "@/schemas/get-jira-render-fields";
@@ -26,10 +26,7 @@ export default function ExtractionReviewForm({
   onConfirm,
 }: Props) {
   const [ticket, setTicket] = useState<UniversalTicket>(initialTicket);
-
-  useEffect(() => {
-    setTicket(initialTicket);
-  }, [initialTicket]);
+  const [jiraValidationErrors, setJiraValidationErrors] = useState(0);
 
   const isJiraTicket = ticket.source === "jira";
 
@@ -42,8 +39,11 @@ export default function ExtractionReviewForm({
 
   const isConfirmDisabled = useMemo(() => {
     if (!isJiraTicket) return false;
-    return hasMissingRequiredFields(ticket, jiraRenderFields);
-  }, [ticket, isJiraTicket, jiraRenderFields]);
+    return (
+      hasMissingRequiredFields(ticket, jiraRenderFields) ||
+      jiraValidationErrors > 0
+    );
+  }, [ticket, isJiraTicket, jiraRenderFields, jiraValidationErrors]);
 
   return (
     <section className="mt-8">
@@ -73,19 +73,40 @@ export default function ExtractionReviewForm({
               </div>
             </div>
           ) : null}
+
+          {isJiraTicket && jiraValidationErrors > 0 ? (
+            <div className="mt-3 rounded-xl border border-red-800/70 bg-red-950/20 p-3">
+              <p className="text-sm text-red-300">
+                Fix {jiraValidationErrors} invalid field
+                {jiraValidationErrors === 1 ? "" : "s"} format before
+                confirming.
+              </p>
+            </div>
+          ) : null}
         </div>
 
         {isJiraTicket ? (
-          <JiraSchemaReviewFields ticket={ticket} onChange={setTicket} />
+          <JiraSchemaReviewFields
+            ticket={ticket}
+            originalTicket={initialTicket}
+            onChange={setTicket}
+            onValidationStateChange={(state) =>
+              setJiraValidationErrors(state.errorsCount)
+            }
+          />
         ) : null}
 
         <div className="sticky bottom-3 z-10 rounded-xl border border-zinc-700 bg-zinc-900/95 p-3 backdrop-blur">
           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <p className="text-sm text-zinc-300">
               {isConfirmDisabled
-                ? `${missingRequiredFields.length} required field${
-                    missingRequiredFields.length === 1 ? "" : "s"
-                  } still missing.`
+                ? jiraValidationErrors > 0
+                  ? `${jiraValidationErrors} field format issue${
+                      jiraValidationErrors === 1 ? "" : "s"
+                    } to fix.`
+                  : `${missingRequiredFields.length} required field${
+                      missingRequiredFields.length === 1 ? "" : "s"
+                    } still missing.`
                 : "All required fields are complete."}
             </p>
 

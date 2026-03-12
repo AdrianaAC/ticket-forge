@@ -139,6 +139,11 @@ export default function Home() {
 
         {analysisResult && !confirmedTicket ? (
           <ExtractionReviewForm
+            key={[
+              analysisResult.ticket.key ?? analysisResult.ticket.id ?? "",
+              analysisResult.ticket.title,
+              analysisResult.ticket.sourceScreenshotsCount ?? "",
+            ].join("|")}
             initialTicket={analysisResult.ticket}
             onConfirm={handleConfirmTicket}
           />
