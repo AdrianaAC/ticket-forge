@@ -54,6 +54,32 @@ function normalizeConfidenceValue(value: number): number | undefined {
   return undefined;
 }
 
+export function setTicketFieldConfidence(
+  ticket: UniversalTicket,
+  fieldKey: string,
+  confidence: number,
+): UniversalTicket {
+  const normalized = normalizeConfidenceValue(confidence);
+  if (typeof normalized !== "number") return ticket;
+
+  const nextConfidence = { ...(ticket.fieldConfidence ?? {}) };
+  let changed = false;
+
+  for (const key of getConfidenceKeysForField(fieldKey)) {
+    if (nextConfidence[key] !== normalized) {
+      nextConfidence[key] = normalized;
+      changed = true;
+    }
+  }
+
+  if (!changed) return ticket;
+
+  return {
+    ...ticket,
+    fieldConfidence: nextConfidence,
+  };
+}
+
 function clearConfidenceForField(
   ticket: UniversalTicket,
   fieldKey: string,

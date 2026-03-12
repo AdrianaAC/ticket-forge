@@ -5,6 +5,7 @@ import type { UniversalTicket } from "@/types/universal-ticket";
 import {
   getTicketFieldConfidence,
   getTicketFieldValue,
+  setTicketFieldConfidence,
   setTicketFieldValue,
 } from "@/lib/tickets/ticket-field-helpers";
 import EditableDropdown from "@/components/EditableDropdown";
@@ -35,6 +36,18 @@ type FieldState = {
   validationError?: string;
   isChanged: boolean;
 };
+
+type JiraRenderFields = ReturnType<typeof getJiraRenderFields>;
+type JiraRenderField = JiraRenderFields[keyof JiraRenderFields];
+const LOW_CONFIDENCE_THRESHOLD = 0.75;
+const AUTO_SELECTED_CONFIDENCE = 0.6;
+const STRICT_PREFILLED_DROPDOWN_FIELDS = new Set([
+  "status",
+  "priority",
+  "urgency",
+  "impact",
+  "pending_reason",
+]);
 
 function toLabel(key: string) {
   return key
@@ -92,7 +105,29 @@ function getValidationError(fieldKey: string, value: string): string | undefined
   return undefined;
 }
 
-const LOW_CONFIDENCE_THRESHOLD = 0.75;
+function getAllowedValues(fieldDef: JiraRenderField): string[] {
+  if (!("allowed_values" in fieldDef) || !Array.isArray(fieldDef.allowed_values)) {
+    return [];
+  }
+
+  return Array.from(fieldDef.allowed_values as readonly string[]);
+}
+
+function allowsCustomValues(fieldDef: JiraRenderField): boolean {
+  return "allow_custom_values" in fieldDef && fieldDef.allow_custom_values === true;
+}
+
+function getValueSeedOptions(value: string, isArrayField: boolean): string[] {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  if (!isArrayField) return [trimmed];
+
+  return trimmed
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
 
 export default function JiraSchemaReviewFields({
   ticket,
@@ -140,17 +175,54 @@ export default function JiraSchemaReviewFields({
     const result: Record<string, string[]> = {};
 
     for (const [fieldKey, fieldDef] of fieldEntries) {
-      const baseOptions =
-        "allowed_values" in fieldDef && Array.isArray(fieldDef.allowed_values)
-          ? [...fieldDef.allowed_values]
-          : [];
+      const baseOptions = getAllowedValues(fieldDef);
+      const isArrayField = "type" in fieldDef && fieldDef.type === "array";
+      const extractedValue = getTicketFieldValue(ticket, fieldKey);
+      const originalExtractedValue = originalTicket
+        ? getTicketFieldValue(originalTicket, fieldKey)
+        : "";
+      const seededOptions = [
+        ...getValueSeedOptions(extractedValue, isArrayField),
+        ...getValueSeedOptions(originalExtractedValue, isArrayField),
+      ];
 
       const extraOptions = customOptions[fieldKey] ?? [];
-      result[fieldKey] = Array.from(new Set([...baseOptions, ...extraOptions]));
+      result[fieldKey] = Array.from(
+        new Set([...baseOptions, ...seededOptions, ...extraOptions]),
+      );
     }
 
     return result;
-  }, [fieldEntries, customOptions]);
+  }, [fieldEntries, ticket, originalTicket, customOptions]);
+
+  useEffect(() => {
+    let nextTicket = ticket;
+    let hasChanges = false;
+
+    for (const [fieldKey, fieldDef] of fieldEntries) {
+      if (fieldDef.input_type !== "dropdown") continue;
+      if (!STRICT_PREFILLED_DROPDOWN_FIELDS.has(fieldKey)) continue;
+      if (allowsCustomValues(fieldDef)) continue;
+
+      const options = getAllowedValues(fieldDef);
+      if (options.length === 0) continue;
+
+      const currentValue = getTicketFieldValue(nextTicket, fieldKey).trim();
+      if (currentValue) continue;
+
+      nextTicket = setTicketFieldValue(nextTicket, fieldKey, options[0]);
+      nextTicket = setTicketFieldConfidence(
+        nextTicket,
+        fieldKey,
+        AUTO_SELECTED_CONFIDENCE,
+      );
+      hasChanges = true;
+    }
+
+    if (hasChanges) {
+      onChange(nextTicket);
+    }
+  }, [fieldEntries, onChange, ticket]);
 
   const fieldStateByKey = useMemo(() => {
     const entries = fieldEntries.map(([fieldKey]) => {
@@ -248,9 +320,7 @@ export default function JiraSchemaReviewFields({
     const fieldDef = renderFields[fieldKey as keyof typeof renderFields];
 
     const baseOptions =
-      "allowed_values" in fieldDef && Array.isArray(fieldDef.allowed_values)
-        ? fieldDef.allowed_values
-        : [];
+      getAllowedValues(fieldDef);
 
     setCustomOptions((prev) => {
       const existing = prev[fieldKey] ?? [];
@@ -436,7 +506,6 @@ export default function JiraSchemaReviewFields({
                         const isFormatInvalid = Boolean(state.validationError);
                         const isInvalid = isRequiredMissing || isFormatInvalid;
                         const isLowConfidence = !isInvalid && state.isLowConfidence;
-                        const isEmptyField = isEmptyValue && !isInvalid;
                         const confidence = state.confidence;
 
                         const baseClasses =
@@ -447,16 +516,12 @@ export default function JiraSchemaReviewFields({
                           "border-red-500 text-red-100 placeholder:text-transparent focus:border-red-400";
                         const lowConfidenceClasses =
                           "border-amber-500 text-amber-100 placeholder:text-amber-300/40 focus:border-amber-400";
-                        const emptyFieldClasses =
-                          "border-amber-700 bg-amber-950/30 text-amber-100 placeholder:text-transparent focus:border-amber-500";
 
                         const commonClasses = `${baseClasses} ${
                           isInvalid
                             ? invalidClasses
                             : isLowConfidence
                               ? lowConfidenceClasses
-                              : isEmptyField
-                                ? emptyFieldClasses
                                 : validClasses
                         }`;
 
@@ -483,14 +548,13 @@ export default function JiraSchemaReviewFields({
                             </label>
 
                             {fieldDef.input_type === "dropdown" &&
-                            "allow_custom_values" in fieldDef &&
-                            fieldDef.allow_custom_values ? (
+                            allowsCustomValues(fieldDef) ? (
                               <EditableDropdown
                                 value={value}
                                 options={mergedOptions[fieldKey] ?? []}
                                 placeholder="Choose an option"
                                 invalid={isInvalid}
-                                warning={isLowConfidence || isEmptyField}
+                                warning={isLowConfidence}
                                 onChange={(newValue) =>
                                   onChange(
                                     setTicketFieldValue(
@@ -518,10 +582,8 @@ export default function JiraSchemaReviewFields({
                                 }
                                 className={commonClasses}
                               >
-                                {("allowed_values" in fieldDef &&
-                                Array.isArray(fieldDef.allowed_values)
-                                  ? fieldDef.allowed_values
-                                  : []
+                                {(mergedOptions[fieldKey] ??
+                                  getAllowedValues(fieldDef)
                                 ).map((option) => (
                                   <option key={option} value={option}>
                                     {option}
