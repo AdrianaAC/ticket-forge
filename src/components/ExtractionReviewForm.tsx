@@ -14,6 +14,13 @@ type Props = {
   onConfirm: (ticket: UniversalTicket) => void;
 };
 
+function toLabel(fieldKey: string) {
+  return fieldKey
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export default function ExtractionReviewForm({
   initialTicket,
   onConfirm,
@@ -49,9 +56,22 @@ export default function ExtractionReviewForm({
           </p>
 
           {isJiraTicket && missingRequiredFields.length > 0 ? (
-            <p className="mt-3 text-sm text-red-400">
-              Please fill all required fields before confirming.
-            </p>
+            <div className="mt-4 rounded-xl border border-red-800/70 bg-red-950/30 p-3">
+              <p className="text-sm text-red-300">
+                Please fill all required fields before confirming (
+                {missingRequiredFields.length} missing).
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {missingRequiredFields.map((field) => (
+                  <span
+                    key={field}
+                    className="rounded-md border border-red-700/80 bg-red-950 px-2 py-1 text-xs text-red-200"
+                  >
+                    {toLabel(field)}
+                  </span>
+                ))}
+              </div>
+            </div>
           ) : null}
         </div>
 
@@ -59,20 +79,30 @@ export default function ExtractionReviewForm({
           <JiraSchemaReviewFields ticket={ticket} onChange={setTicket} />
         ) : null}
 
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => onConfirm(ticket)}
-            disabled={isConfirmDisabled}
-            className={[
-              "rounded-xl px-5 py-3 font-medium transition",
-              isConfirmDisabled
-                ? "cursor-not-allowed bg-zinc-700 text-zinc-400"
-                : "bg-white text-zinc-950 hover:opacity-90",
-            ].join(" ")}
-          >
-            Confirm ticket
-          </button>
+        <div className="sticky bottom-3 z-10 rounded-xl border border-zinc-700 bg-zinc-900/95 p-3 backdrop-blur">
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+            <p className="text-sm text-zinc-300">
+              {isConfirmDisabled
+                ? `${missingRequiredFields.length} required field${
+                    missingRequiredFields.length === 1 ? "" : "s"
+                  } still missing.`
+                : "All required fields are complete."}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => onConfirm(ticket)}
+              disabled={isConfirmDisabled}
+              className={[
+                "rounded-xl px-5 py-3 font-medium transition",
+                isConfirmDisabled
+                  ? "cursor-not-allowed bg-zinc-700 text-zinc-400"
+                  : "bg-white text-zinc-950 hover:opacity-90",
+              ].join(" ")}
+            >
+              Confirm ticket
+            </button>
+          </div>
         </div>
       </div>
     </section>

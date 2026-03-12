@@ -70,13 +70,50 @@ export default function Home() {
     setConfirmedTicket(ticket);
   }
 
+  function handleStartNewAnalysis() {
+    setConfirmedTicket(null);
+    setAnalysisResult(null);
+    setError(null);
+    setFiles([]);
+  }
+
+  const currentStep = confirmedTicket ? 3 : analysisResult ? 2 : 1;
+  const steps = [
+    { id: 1, label: "Upload" },
+    { id: 2, label: "Review" },
+    { id: 3, label: "Finalize" },
+  ];
+
   return (
-    <main className="min-h-screen bg-zinc-950 p-8 text-zinc-100">
+    <main className="min-h-screen bg-zinc-950 px-4 py-6 text-zinc-100 sm:p-8">
       <div className="mx-auto max-w-5xl">
         <h1 className="text-4xl font-bold">TicketForge</h1>
         <p className="mt-3 text-zinc-400">
           Turn ticket screenshots into clear developer briefs.
         </p>
+
+        <div className="mt-6 grid grid-cols-3 gap-2 rounded-xl border border-zinc-800 bg-zinc-900/70 p-3">
+          {steps.map((step) => {
+            const isActive = step.id === currentStep;
+            const isDone = step.id < currentStep;
+
+            return (
+              <div
+                key={step.id}
+                className={[
+                  "rounded-lg border px-3 py-2 text-center text-xs uppercase tracking-[0.12em] transition",
+                  isActive
+                    ? "border-blue-500/60 bg-blue-500/15 text-blue-200"
+                    : isDone
+                      ? "border-emerald-600/60 bg-emerald-500/10 text-emerald-200"
+                      : "border-zinc-700 bg-zinc-900 text-zinc-500",
+                ].join(" ")}
+              >
+                {step.label}
+              </div>
+            );
+          })}
+        </div>
 
         <TicketTypeSelector value={source} onChange={setSource} />
         <UploadZone onFilesSelected={setFiles} />
@@ -108,7 +145,19 @@ export default function Home() {
         ) : null}
 
         {confirmedTicket ? (
-          <FinalTicketPreview ticket={confirmedTicket} />
+          <>
+            <FinalTicketPreview ticket={confirmedTicket} />
+
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={handleStartNewAnalysis}
+                className="rounded-xl border border-zinc-600 bg-zinc-900 px-5 py-3 text-sm font-medium text-zinc-100 transition hover:border-zinc-400 hover:bg-zinc-800"
+              >
+                Start new analysis
+              </button>
+            </div>
+          </>
         ) : null}
       </div>
     </main>
