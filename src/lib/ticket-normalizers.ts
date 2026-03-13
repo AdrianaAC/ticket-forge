@@ -48,6 +48,7 @@ export function normalizeKind(value?: string): TicketKind {
   if (v.includes("subtask") || v.includes("sub-task")) return "subtask";
   if (v.includes("spike")) return "spike";
   if (v.includes("improvement")) return "improvement";
+  if (v.includes("requirement")) return "pbi";
   if (v.includes("product backlog item") || v === "pbi") return "pbi";
   if (v.includes("issue")) return "issue";
 
