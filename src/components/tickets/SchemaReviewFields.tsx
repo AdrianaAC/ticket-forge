@@ -158,8 +158,8 @@ export default function SchemaReviewFields({
     Record<ReviewSectionConfig["id"], boolean>
   >({
     core: true,
-    relationships: false,
-    custom: false,
+    relationships: true,
+    custom: true,
   });
 
   const mergedOptions = useMemo(() => {

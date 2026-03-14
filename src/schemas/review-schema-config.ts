@@ -1,4 +1,5 @@
 import { azureDevopsTicketSchema } from "@/schemas/azure-ticket-schema";
+import { githubIssueSchema } from "@/schemas/github-ticket-schema";
 import { jiraTicketSchema } from "@/schemas/jira-ticket-schema";
 import type { TicketSource } from "@/types/universal-ticket";
 
@@ -41,6 +42,7 @@ const JIRA_STRICT_PREFILLED_DROPDOWNS = new Set([
 ]);
 
 const AZURE_STRICT_PREFILLED_DROPDOWNS = new Set<string>([]);
+const GITHUB_STRICT_PREFILLED_DROPDOWNS = new Set<string>([]);
 
 export function getReviewConfig(source: TicketSource): ReviewConfig | null {
   switch (source) {
@@ -55,6 +57,12 @@ export function getReviewConfig(source: TicketSource): ReviewConfig | null {
         label: "Azure DevOps",
         schema: azureDevopsTicketSchema,
         strictPrefilledDropdownFields: AZURE_STRICT_PREFILLED_DROPDOWNS,
+      };
+    case "github":
+      return {
+        label: "GitHub",
+        schema: githubIssueSchema,
+        strictPrefilledDropdownFields: GITHUB_STRICT_PREFILLED_DROPDOWNS,
       };
     default:
       return null;

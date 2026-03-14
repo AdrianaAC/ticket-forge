@@ -18,6 +18,8 @@ function getConfidenceKeysForField(fieldKey: string): string[] {
     case "issue_type":
     case "work_item_type":
       return ["kind", "issue_type", "work_item_type"];
+    case "issue_number":
+      return ["id", "key", "issue_number"];
     case "title":
       return ["title"];
     case "description":
@@ -47,6 +49,10 @@ function getConfidenceKeysForField(fieldKey: string): string[] {
     case "creator":
     case "created_by":
       return ["createdBy", "creator", "created_by"];
+    case "milestone":
+      return ["milestone"];
+    case "comments":
+      return ["comments"];
     case "created_date":
       return ["created_at", "createdDate", "created_date"];
     case "changed_date":
@@ -321,6 +327,8 @@ function getMappedFieldValue(
       return (
         getCustomOrFieldString(ticket, fieldKey) ?? formatWorkItemType(ticket.kind)
       );
+    case "issue_number":
+      return ticket.id ?? ticket.key ?? "";
     case "title":
       return ticket.title ?? "";
     case "description":
@@ -357,6 +365,10 @@ function getMappedFieldValue(
     case "creator":
     case "created_by":
       return ticket.createdBy ?? "";
+    case "milestone":
+      return ticket.milestone ?? "";
+    case "comments":
+      return joinLines(ticket.comments);
     case "created_date":
       return toDisplayString(
         ticket.customFields?.created_at ?? ticket.customFields?.created_date,
@@ -442,6 +454,10 @@ export function setTicketFieldValue(
     case "issue_type":
     case "work_item_type":
       return finalize({ ...ticket, kind: normalizeKind(value) });
+    case "issue_number": {
+      const nextId = cleanString(value);
+      return finalize({ ...ticket, id: nextId, key: nextId });
+    }
     case "title":
       return finalize({ ...ticket, title: value });
     case "description":
@@ -485,6 +501,10 @@ export function setTicketFieldValue(
     case "creator":
     case "created_by":
       return finalize({ ...ticket, createdBy: cleanString(value) });
+    case "milestone":
+      return finalize({ ...ticket, milestone: cleanString(value) });
+    case "comments":
+      return finalize({ ...ticket, comments: splitLines(value) });
     case "created_date":
       return finalize({
         ...ticket,
