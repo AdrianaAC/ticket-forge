@@ -9,10 +9,18 @@ import {
   setTicketFieldValue,
 } from "@/lib/tickets/ticket-field-helpers";
 import EditableDropdown from "@/components/EditableDropdown";
-import { getJiraRenderFields } from "@/schemas/get-jira-render-fields";
-import { jiraTicketSchema } from "@/schemas/jira-ticket-schema";
+import {
+  getReviewRenderFields,
+  getReviewSectionConfigs,
+  type ReviewSchemaDefinition,
+  type ReviewSchemaField,
+  type ReviewSectionConfig,
+} from "@/schemas/review-schema-config";
 
 type Props = {
+  label: string;
+  schema: ReviewSchemaDefinition;
+  strictPrefilledDropdownFields?: ReadonlySet<string>;
   ticket: UniversalTicket;
   originalTicket?: UniversalTicket;
   onChange: (ticket: UniversalTicket) => void;
@@ -20,12 +28,6 @@ type Props = {
 };
 
 type FieldFilter = "all" | "empty" | "low_confidence";
-
-type SectionConfig = {
-  id: "core" | "relationships" | "custom";
-  title: string;
-  fieldKeys: string[];
-};
 
 type FieldState = {
   value: string;
@@ -37,17 +39,8 @@ type FieldState = {
   isChanged: boolean;
 };
 
-type JiraRenderFields = ReturnType<typeof getJiraRenderFields>;
-type JiraRenderField = JiraRenderFields[keyof JiraRenderFields];
 const LOW_CONFIDENCE_THRESHOLD = 0.75;
 const AUTO_SELECTED_CONFIDENCE = 0.6;
-const STRICT_PREFILLED_DROPDOWN_FIELDS = new Set([
-  "status",
-  "priority",
-  "urgency",
-  "impact",
-  "pending_reason",
-]);
 
 function toLabel(key: string) {
   return key
@@ -75,23 +68,31 @@ function isValidIsoDate(value: string) {
   return date.toISOString().slice(0, 10) === value;
 }
 
-function getValidationError(fieldKey: string, value: string): string | undefined {
+function isValidDateTime(value: string) {
+  return !Number.isNaN(Date.parse(value));
+}
+
+function getValidationError(
+  fieldKey: string,
+  value: string,
+  fieldDef: ReviewSchemaField,
+): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
 
-  if (fieldKey === "due_date") {
-    if (!isValidIsoDate(trimmed)) {
-      return "Use a valid date in YYYY-MM-DD format.";
-    }
+  if (fieldDef.type === "date" && !isValidIsoDate(trimmed)) {
+    return "Use a valid date in YYYY-MM-DD format.";
   }
 
-  if (fieldKey === "story_points") {
-    if (!/^\d+(\.\d+)?$/.test(trimmed)) {
-      return "Use a numeric value for story points.";
-    }
+  if (fieldDef.type === "datetime" && !isValidDateTime(trimmed)) {
+    return "Use a valid date/time value.";
   }
 
-  if (fieldKey === "original_estimate") {
+  if (fieldDef.type === "number" && !/^\d+(\.\d+)?$/.test(trimmed)) {
+    return "Use a numeric value.";
+  }
+
+  if (fieldKey === "original_estimate" && fieldDef.type === "string") {
     if (/^\d+(\.\d+)?$/.test(trimmed)) return undefined;
 
     const estimatePattern =
@@ -105,16 +106,18 @@ function getValidationError(fieldKey: string, value: string): string | undefined
   return undefined;
 }
 
-function getAllowedValues(fieldDef: JiraRenderField): string[] {
-  if (!("allowed_values" in fieldDef) || !Array.isArray(fieldDef.allowed_values)) {
+function getAllowedValues(fieldDef: ReviewSchemaField): string[] {
+  if (!Array.isArray(fieldDef.allowed_values)) {
     return [];
   }
 
-  return Array.from(fieldDef.allowed_values as readonly string[]);
+  return Array.from(
+    new Set(fieldDef.allowed_values.map((value) => String(value))),
+  );
 }
 
-function allowsCustomValues(fieldDef: JiraRenderField): boolean {
-  return "allow_custom_values" in fieldDef && fieldDef.allow_custom_values === true;
+function allowsCustomValues(fieldDef: ReviewSchemaField): boolean {
+  return fieldDef.allow_custom_values === true;
 }
 
 function getValueSeedOptions(value: string, isArrayField: boolean): string[] {
@@ -129,34 +132,20 @@ function getValueSeedOptions(value: string, isArrayField: boolean): string[] {
     .filter((item) => item.length > 0);
 }
 
-export default function JiraSchemaReviewFields({
+export default function SchemaReviewFields({
+  label,
+  schema,
+  strictPrefilledDropdownFields = new Set<string>(),
   ticket,
   originalTicket,
   onChange,
   onValidationStateChange,
 }: Props) {
-  const renderFields = useMemo(() => getJiraRenderFields(), []);
+  const renderFields = useMemo(() => getReviewRenderFields(schema), [schema]);
   const fieldEntries = useMemo(() => Object.entries(renderFields), [renderFields]);
-
-  const sectionConfigs = useMemo<SectionConfig[]>(
-    () => [
-      {
-        id: "core",
-        title: "Core fields",
-        fieldKeys: Object.keys(jiraTicketSchema.core),
-      },
-      {
-        id: "relationships",
-        title: "Relationships",
-        fieldKeys: Object.keys(jiraTicketSchema.relationships),
-      },
-      {
-        id: "custom",
-        title: "Custom fields",
-        fieldKeys: Object.keys(jiraTicketSchema.custom_fields),
-      },
-    ],
-    [],
+  const sectionConfigs = useMemo<ReviewSectionConfig[]>(
+    () => getReviewSectionConfigs(schema),
+    [schema],
   );
 
   const [customOptions, setCustomOptions] = useState<Record<string, string[]>>(
@@ -165,10 +154,12 @@ export default function JiraSchemaReviewFields({
   const [filter, setFilter] = useState<FieldFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showDiff, setShowDiff] = useState(false);
-  const [openSections, setOpenSections] = useState<Record<SectionConfig["id"], boolean>>({
+  const [openSections, setOpenSections] = useState<
+    Record<ReviewSectionConfig["id"], boolean>
+  >({
     core: true,
-    relationships: false,
-    custom: false,
+    relationships: true,
+    custom: true,
   });
 
   const mergedOptions = useMemo(() => {
@@ -176,7 +167,7 @@ export default function JiraSchemaReviewFields({
 
     for (const [fieldKey, fieldDef] of fieldEntries) {
       const baseOptions = getAllowedValues(fieldDef);
-      const isArrayField = "type" in fieldDef && fieldDef.type === "array";
+      const isArrayField = fieldDef.type === "array";
       const extractedValue = getTicketFieldValue(ticket, fieldKey);
       const originalExtractedValue = originalTicket
         ? getTicketFieldValue(originalTicket, fieldKey)
@@ -193,7 +184,7 @@ export default function JiraSchemaReviewFields({
     }
 
     return result;
-  }, [fieldEntries, ticket, originalTicket, customOptions]);
+  }, [customOptions, fieldEntries, originalTicket, ticket]);
 
   useEffect(() => {
     let nextTicket = ticket;
@@ -201,7 +192,7 @@ export default function JiraSchemaReviewFields({
 
     for (const [fieldKey, fieldDef] of fieldEntries) {
       if (fieldDef.input_type !== "dropdown") continue;
-      if (!STRICT_PREFILLED_DROPDOWN_FIELDS.has(fieldKey)) continue;
+      if (!strictPrefilledDropdownFields.has(fieldKey)) continue;
       if (allowsCustomValues(fieldDef)) continue;
 
       const options = getAllowedValues(fieldDef);
@@ -222,10 +213,10 @@ export default function JiraSchemaReviewFields({
     if (hasChanges) {
       onChange(nextTicket);
     }
-  }, [fieldEntries, onChange, ticket]);
+  }, [fieldEntries, onChange, strictPrefilledDropdownFields, ticket]);
 
   const fieldStateByKey = useMemo(() => {
-    const entries = fieldEntries.map(([fieldKey]) => {
+    const entries = fieldEntries.map(([fieldKey, fieldDef]) => {
       const value = getTicketFieldValue(ticket, fieldKey);
       const originalValue = originalTicket
         ? getTicketFieldValue(originalTicket, fieldKey)
@@ -236,7 +227,7 @@ export default function JiraSchemaReviewFields({
         !isEmptyValue &&
         typeof confidence === "number" &&
         confidence < LOW_CONFIDENCE_THRESHOLD;
-      const validationError = getValidationError(fieldKey, value);
+      const validationError = getValidationError(fieldKey, value, fieldDef);
       const isChanged =
         normalizeForCompare(value) !== normalizeForCompare(originalValue);
 
@@ -255,7 +246,7 @@ export default function JiraSchemaReviewFields({
     });
 
     return Object.fromEntries(entries) as Record<string, FieldState>;
-  }, [fieldEntries, ticket, originalTicket]);
+  }, [fieldEntries, originalTicket, ticket]);
 
   const lowConfidenceCount = useMemo(() => {
     return Object.values(fieldStateByKey).reduce((count, state) => {
@@ -291,10 +282,7 @@ export default function JiraSchemaReviewFields({
     return state.isLowConfidence;
   };
 
-  const matchesSearch = (
-    fieldKey: string,
-    fieldDef: (typeof renderFields)[keyof typeof renderFields],
-  ) => {
+  const matchesSearch = (fieldKey: string, fieldDef: ReviewSchemaField) => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return true;
 
@@ -317,10 +305,8 @@ export default function JiraSchemaReviewFields({
     const trimmed = newValue.trim();
     if (!trimmed) return;
 
-    const fieldDef = renderFields[fieldKey as keyof typeof renderFields];
-
-    const baseOptions =
-      getAllowedValues(fieldDef);
+    const fieldDef = renderFields[fieldKey];
+    const baseOptions = getAllowedValues(fieldDef);
 
     setCustomOptions((prev) => {
       const existing = prev[fieldKey] ?? [];
@@ -338,7 +324,7 @@ export default function JiraSchemaReviewFields({
     });
   };
 
-  const toggleSection = (sectionId: SectionConfig["id"]) => {
+  const toggleSection = (sectionId: ReviewSectionConfig["id"]) => {
     setOpenSections((prev) => ({
       ...prev,
       [sectionId]: !prev[sectionId],
@@ -348,7 +334,7 @@ export default function JiraSchemaReviewFields({
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-lg font-semibold text-white">Jira fields</h3>
+        <h3 className="text-lg font-semibold text-white">{label} fields</h3>
         <p className="mt-1 text-xs text-zinc-400">
           {fieldEntries.length} total fields | {emptyFieldsCount} empty |{" "}
           {changedFieldsCount} edited
@@ -446,7 +432,7 @@ export default function JiraSchemaReviewFields({
         {sectionConfigs.map((section) => {
           const visibleEntries = section.fieldKeys
             .map((fieldKey) => {
-              const fieldDef = renderFields[fieldKey as keyof typeof renderFields];
+              const fieldDef = renderFields[fieldKey];
               const state = fieldStateByKey[fieldKey];
               if (!fieldDef || !state) return null;
               if (!matchesFilter(state)) return null;
@@ -456,10 +442,7 @@ export default function JiraSchemaReviewFields({
             .filter(
               (
                 entry,
-              ): entry is readonly [
-                string,
-                (typeof renderFields)[keyof typeof renderFields],
-              ] => Boolean(entry),
+              ): entry is readonly [string, ReviewSchemaField] => Boolean(entry),
             );
 
           const isOpen = openSections[section.id];
@@ -499,7 +482,7 @@ export default function JiraSchemaReviewFields({
                       {visibleEntries.map(([fieldKey, fieldDef]) => {
                         const state = fieldStateByKey[fieldKey];
                         const value = state.value;
-                        const label = toLabel(fieldKey);
+                        const labelText = toLabel(fieldKey);
                         const isEmptyValue = state.isEmptyValue;
                         const isRequired = !!fieldDef.required;
                         const isRequiredMissing = isRequired && isEmptyValue;
@@ -522,7 +505,7 @@ export default function JiraSchemaReviewFields({
                             ? invalidClasses
                             : isLowConfidence
                               ? lowConfidenceClasses
-                                : validClasses
+                              : validClasses
                         }`;
 
                         return (
@@ -535,7 +518,7 @@ export default function JiraSchemaReviewFields({
                             }
                           >
                             <label className="mb-2 block text-sm font-medium text-zinc-200">
-                              {label}
+                              {labelText}
                               {isRequired ? (
                                 <span className="ml-1 text-red-400">*</span>
                               ) : null}

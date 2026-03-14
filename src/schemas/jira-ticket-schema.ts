@@ -10,6 +10,7 @@ export const jiraTicketSchema = {
       required: true,
       description:
         "Project or space where the issue will be created.",
+      allowed_values: ["personal (PER)", "Demo service space (DEMO)"],
       examples: ["personal (PER)", "Demo service space (DEMO)"],
       allow_custom_values: true,
     },
@@ -54,7 +55,15 @@ export const jiraTicketSchema = {
       required: false,
       description:
         "Current workflow status of the issue.",
-      allow_custom_values: true,
+      allowed_values: [
+        "To Do",
+        "In Progress",
+        "In Review",
+        "Blocked",
+        "Done",
+        "Cancelled",
+      ],
+      allow_custom_values: false,
     },
 
     priority: {
@@ -63,7 +72,8 @@ export const jiraTicketSchema = {
       required: false,
       description:
         "Relative importance of the issue.",
-      allow_custom_values: true,
+      allowed_values: ["Highest", "High", "Medium", "Low", "Lowest"],
+      allow_custom_values: false,
     },
 
     due_date: {
@@ -131,6 +141,7 @@ export const jiraTicketSchema = {
       required: false,
       description:
         "Project-specific or service-desk-specific request classification.",
+      allowed_values: ["No request type"],
       allow_custom_values: true,
     },
 
@@ -138,6 +149,17 @@ export const jiraTicketSchema = {
       type: "array",
       input_type: "dropdown",
       required: false,
+      allowed_values: [
+        "Active Directory",
+        "Analytics and Reporting Service",
+        "Billing Services",
+        "Cloud Storage Services",
+        "Data Center Services",
+        "Email and Collaboration Services",
+        "Financial Services",
+        "HR Services",
+        "Intranet",
+      ],
       items: {
         type: "string",
       },
@@ -184,7 +206,8 @@ export const jiraTicketSchema = {
       required: false,
       description:
         "How quickly the issue needs attention.",
-      allow_custom_values: true,
+      allowed_values: ["Critical", "High", "Medium", "Low"],
+      allow_custom_values: false,
     },
 
     impact: {
@@ -193,7 +216,13 @@ export const jiraTicketSchema = {
       required: false,
       description:
         "Scale or breadth of impact caused by the issue.",
-      allow_custom_values: true,
+      allowed_values: [
+        "Extensive / Widespread",
+        "Significant / Large",
+        "Moderate / Limited",
+        "Minor / Localized",
+      ],
+      allow_custom_values: false,
     },
 
     pending_reason: {
@@ -202,7 +231,13 @@ export const jiraTicketSchema = {
       required: false,
       description:
         "Reason the issue is currently pending.",
-      allow_custom_values: true,
+      allowed_values: [
+        "More info required",
+        "Awaiting approval",
+        "Waiting on vendor",
+        "Pending on change request",
+      ],
+      allow_custom_values: false,
     },
 
     approver_groups: {

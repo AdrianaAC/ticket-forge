@@ -14,10 +14,17 @@ import { buildFallbackNotes } from "@/lib/ticket-notes";
 import { normalizeTicketNulls } from "@/lib/utils/ticket-null-normalizer";
 import { validateTicketSchema } from "@/lib/utils/ticket-schema-self-test";
 import type { UniversalTicket } from "@/types/universal-ticket";
+import { createHash } from "node:crypto";
+
+validateTicketSchema();
 
 const requestSchema = z.object({
   source: z.enum(["jira", "azure", "github", "unknown"]),
   images: z.array(z.string()).min(1),
+});
+
+const multipartSourceSchema = z.object({
+  source: z.enum(["jira", "azure", "github", "unknown"]),
 });
 
 const CREATED_FIELD_ALIASES = [
@@ -37,6 +44,22 @@ const UPDATED_FIELD_ALIASES = [
 ];
 
 const LOW_CONFIDENCE_DEFAULT = 0.6;
+const ANALYZE_CACHE_TTL_MS = 10 * 60 * 1000;
+
+type AnalyzeCacheEntry = {
+  createdAt: number;
+  result: unknown;
+};
+
+const analyzeResponseCache = new Map<string, AnalyzeCacheEntry>();
+
+function pruneAnalyzeCache(now: number) {
+  for (const [key, value] of analyzeResponseCache.entries()) {
+    if (now - value.createdAt >= ANALYZE_CACHE_TTL_MS) {
+      analyzeResponseCache.delete(key);
+    }
+  }
+}
 
 function promoteCustomFieldAlias(
   customFields: Record<string, string | number | boolean | string[] | null>,
@@ -72,21 +95,77 @@ function mapLowConfidenceFieldAliases(field: string): string[] {
   }
 }
 
+async function imageFileToDataUrl(file: File): Promise<string> {
+  const mime = file.type || "application/octet-stream";
+  const buffer = Buffer.from(await file.arrayBuffer());
+  return `data:${mime};base64,${buffer.toString("base64")}`;
+}
+
+async function parseAnalyzeRequest(request: Request): Promise<
+  | { source: "jira" | "azure" | "github" | "unknown"; images: string[] }
+  | { error: string; status: number }
+> {
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await request.formData();
+    const sourceResult = multipartSourceSchema.safeParse({
+      source: formData.get("source"),
+    });
+
+    if (!sourceResult.success) {
+      return { error: "Invalid request body", status: 400 };
+    }
+
+    const imageFiles = formData
+      .getAll("images")
+      .filter((value): value is File => value instanceof File && value.size > 0);
+
+    if (imageFiles.length === 0) {
+      return { error: "Invalid request body", status: 400 };
+    }
+
+    const images = await Promise.all(imageFiles.map(imageFileToDataUrl));
+    return {
+      source: sourceResult.data.source,
+      images,
+    };
+  }
+
+  const body = await request.json();
+  const parsedBody = requestSchema.safeParse(body);
+
+  if (!parsedBody.success) {
+    return { error: "Invalid request body", status: 400 };
+  }
+
+  return parsedBody.data;
+}
+
 export async function POST(request: Request) {
-  validateTicketSchema();
-
   try {
-    const body = await request.json();
-    const parsedBody = requestSchema.safeParse(body);
+    const parsedRequest = await parseAnalyzeRequest(request);
 
-    if (!parsedBody.success) {
+    if ("error" in parsedRequest) {
       return NextResponse.json(
-        { error: "Invalid request body" },
-        { status: 400 },
+        { error: parsedRequest.error },
+        { status: parsedRequest.status },
       );
     }
 
-    const { source, images } = parsedBody.data;
+    const { source, images } = parsedRequest;
+    const now = Date.now();
+    pruneAnalyzeCache(now);
+    const cacheKey = createHash("sha256")
+      .update(source)
+      .update("\n")
+      .update(images.join("\n"))
+      .digest("hex");
+    const cached = analyzeResponseCache.get(cacheKey);
+
+    if (cached && now - cached.createdAt < ANALYZE_CACHE_TTL_MS) {
+      return NextResponse.json(structuredClone(cached.result));
+    }
 
     const prompt = `
 Analyze these screenshots as a ${source} ticket.
@@ -230,6 +309,10 @@ Return only valid JSON matching the schema.
 
     const fallbackNotes = buildFallbackNotes(t);
     result.notes = Array.from(new Set([...result.notes, ...fallbackNotes]));
+    analyzeResponseCache.set(cacheKey, {
+      createdAt: now,
+      result,
+    });
 
     return NextResponse.json(result);
   } catch (error) {
