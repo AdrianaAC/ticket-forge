@@ -1,4 +1,4 @@
-export const azureDevopsTicketSchemaV2 = {
+export const azureDevopsTicketSchema = {
   entity: "azure_devops_work_item",
   version: "2.0",
   description:
